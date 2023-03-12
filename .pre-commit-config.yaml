@@ -23,3 +23,5 @@ repos:
   hooks:
     - id: pylint
       name: pylint
+
+exclude: data/
