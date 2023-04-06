@@ -1,8 +1,11 @@
 from __future__ import annotations
+from collections import defaultdict
 from math import ceil
 from pathlib import Path
 import random
+from typing import Dict
 
+import click
 import numpy as np
 import pandas as pd
 import spacy
@@ -21,8 +24,9 @@ FREQUENCY_RANGES = ( #instances per million
 ) # changing order to inspect rare words first
 
 MAX_SAMPLED_CONTEXTS_PER_LEMMA = 5
-MIN_NUM_SAMPLED_CONTEXTS = 3000
+MIN_NUM_SAMPLED_CONTEXTS = 3100
 MAX_NUM_SENTENCES_PER_TASK = 300
+MIN_WORD_LEN = 4
 
 def _load_medline_data(path:str) -> pd.DataFrame:
     """
@@ -70,15 +74,53 @@ def _load_un_data(path:str) -> pd.DataFrame:
     }
     return pd.DataFrame.from_dict(un_sentences)
 
+
 def load_initial_data(path:str, source:str) -> pd.DataFrame:
     assert source in ['medline', 'un'], "Currently you can choose only between Medline and UN corpora"
     func = f"_load_{source}_data(\"{path}\")"
     return eval(func)
 
+
 def load_frequency_dict(path:str) -> pd.DataFrame:
-    df = pd.read_csv(path, sep='\t')
-    df = df.set_index("Lemma")
+    name_mapping = {
+        "СЛОВО": "word",
+        "РАНГ": "rank", 
+        "ОНТНОСИТЕЛЬНАЯ ЧАСТОТА (на 1 млн.)": "Freq(ipm)",
+        "ДОКУМЕНТНАЯ ЧАСТОТА": "Doc",	
+        "ЛЕММЫ (по OpenCorpora)": "Lemmas",
+        "POS (по GBN)": "PoS"
+    }
+    df = pd.read_csv(path, sep='\t').rename(columns=name_mapping)
+    df = df.drop(labels=["rank", "Doc"], axis=1)
+    df["PoS"] = df['PoS'].apply(
+        lambda x: list(
+                map(
+                    lambda y: y.replace("%)", "").split("("),
+                    x.replace(" ","").split(",")
+                ),
+                # key=lambda x: float(x[1])
+            )[0][0]
+    )
+    df["Lemmas"] = df["Lemmas"].apply(
+        lambda x: list(filter(
+            lambda w: w[1] in ['(NOUN)', '(NPRO)'],
+            map(
+                lambda y: y.split(" ")[1:],
+                x.split(", "),
+            ),
+        ))
+    )
+    df = df[df["Lemmas"].map(lambda l: len(l)) > 0]
+    df = df[df["PoS"] == "NOUN"].drop(columns=["PoS",]).explode("Lemmas")
+    df["Lemmas"] = df["Lemmas"].apply(
+        lambda x: x[0]
+    )
+    df = df.groupby("Lemmas", sort=False).aggregate(
+        {"word":lambda x: set(x), "Freq(ipm)": "sum"}
+    ).explode("word").reset_index().set_index("word")
+    
     return df
+
 
 def sample_data_for_annotation(initial_data:pd.DataFrame, freq_dict:pd.DataFrame) -> pd.DataFrame:
     """
@@ -97,35 +139,51 @@ def sample_data_for_annotation(initial_data:pd.DataFrame, freq_dict:pd.DataFrame
         dataframe with sampled data, where each sample is described in 5
         columns: lemma, frequency(ipm), context, target_word, start_idx.
     """
-    def add_data_to_sample_from(lemma_info):
-        if lemma_info['PoS'] == 's' and \
-            token.pos_ == 'NOUN' or \
-                lemma_info['PoS'] == 's.PROP' and \
-                    token.pos_ == 'PROPN':
-            if lemma not in data_to_sample:
-                data_to_sample[lemma] = {
-                    'freq': lemma_info['Freq(ipm)'],
-                    'contexts': set(((token.text, sentence),)),
-                    }
-            else:
-                data_to_sample[lemma]['contexts'].add((token.text, sentence))
+    def add_data_to_sample_from(
+                                data_to_sample:Dict,
+                                word: str,
+                                word_info: Dict,
+                                sentence:str) -> Dict:
+        if word_info["Lemmas"] not in data_to_sample:
+            data_to_sample[word_info["Lemmas"]] = {
+                'freq': word_info['Freq(ipm)'],
+                'contexts': set(((word, sentence),)),
+                }
+        else:
+            data_to_sample[word_info["Lemmas"]]['contexts'].add((word, sentence))
+        return data_to_sample
+
+    def apply_heuristics(word:str) -> bool:
+        return len(word) >= MIN_WORD_LEN and \
+            not word.isupper()
 
     data_to_sample = {}
     nlp = spacy.load('ru_core_news_lg')
+    freq_dict_index = set(freq_dict.index) #in check are way faster for set() than for pandas Index
+    freq_dict_dict = {
+        k: g.to_dict(orient='records') for k, g in freq_dict.groupby(level=0)
+        }
     for sentence in tqdm(initial_data['sentence']):
         doc = nlp(sentence)
         for token in doc:
-            lemma = token.lemma_ if token.lemma_ in freq_dict.index \
-                 else token.lemma_.capitalize()
-            if lemma in freq_dict.index:
-                lemmas_info = freq_dict.loc[lemma]
-                if isinstance(lemmas_info, pd.DataFrame):
-                    for idx in range(len(lemmas_info)):
-                        lemma_info = lemmas_info.iloc[idx]
-                        add_data_to_sample_from(lemma_info)
+            word = token.text if token.text in freq_dict_index \
+                else token.text.lower()
+            if word in freq_dict_index and \
+                token.pos_ in ('NOUN', 'PROPN') and \
+                    apply_heuristics(word):
+                word_info = freq_dict_dict[word]
+                if len(word_info) > 1:
+                    for info in word_info:
+                        if info['Lemmas'] == token.lemma_:
+                            word_info = info
+                            break
+                    else:
+                        continue
                 else:
-                    add_data_to_sample_from(lemmas_info)
-
+                    word_info = word_info[0]
+                data_to_sample = add_data_to_sample_from(
+                    data_to_sample, token.text, word_info, sentence
+                )
     found_lemmas = list(data_to_sample.keys())
     random.shuffle(found_lemmas)
     resulting_data = {
@@ -176,8 +234,6 @@ def export_data_for_annotation(sampled_data:pd.DataFrame, path_to_save:str) -> N
         path_to_save: folder to store prepared data
     """
     path_to_save = Path(path_to_save)
-    Path(path_to_save).mkdir(parents=True, exist_ok=True)
-    sampled_data.to_csv(str(path_to_save / "data.tsv"), sep='\t')
     sampled_data = sampled_data.sample(frac=1)
     sub_dfs = np.array_split(sampled_data, ceil(len(sampled_data) / MAX_NUM_SENTENCES_PER_TASK))
     for idx, sub_df in enumerate(sub_dfs):
@@ -193,9 +249,47 @@ def export_data_for_annotation(sampled_data:pd.DataFrame, path_to_save:str) -> N
         df_for_annotation.columns = ["INPUT:text"]
         df_for_annotation.to_csv(str(path_to_save / f"pool_{idx+1}.tsv"), sep='\t')
 
+@click.command()
+@click.argument("save_dir")
+@click.option("--data_source")
+@click.option("--initial_data")
+@click.option(
+    "--freq_dict",
+    default="data/dictionaries/rus_freq_dictionary_1992-2019.csv",
+    help="path to frequency dictionary",
+    show_default=True
+)
+@click.option(
+    "--prepared_data",
+    default=None,
+    help="path to tsv file with pre-sampled data before splitting into pool chunks",
+    show_default=True
+)
+def main(save_dir:str,
+         data_source:str,
+         initial_data:str,
+         freq_dict="data/dictionaries/rus_freq_dictionary_1992-2019.csv",
+         prepared_data=None):
+    """
+    Samples words in different frequency ranges and prepares
+    annotation files in Toloka format for several pools.
+
+    DATA_SOURCE: source of data (i.e. un or medline)
+
+    INITIAL_DATA: path to tsv file with data from data_source
+    
+    SAVE_DIR: path to folder where annotation files will be stored
+    """
+    if prepared_data is not None:
+        sampled_data = pd.read_csv(prepared_data, sep='\t')
+    else:
+        initial_data = load_initial_data(initial_data, data_source)
+        frequency_dict = load_frequency_dict(freq_dict)
+        sampled_data = sample_data_for_annotation(initial_data, frequency_dict)
+        path_to_save = Path(save_dir)
+        path_to_save.mkdir(parents=True, exist_ok=True)
+        sampled_data.to_csv(str(path_to_save / "data.tsv"), sep='\t')
+    export_data_for_annotation(sampled_data, save_dir)
 
 if __name__=='__main__':
-    initial_data = load_initial_data("data/initial/un_2014_ru.tsv", "un")
-    frequency_dict = load_frequency_dict("data/dictionaries/freqrnc2011.csv")
-    sampled_data = sample_data_for_annotation(initial_data, frequency_dict)
-    export_data_for_annotation(sampled_data, "data/annotated/prepared_data/un")
+    main()
