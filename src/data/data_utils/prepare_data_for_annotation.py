@@ -247,7 +247,7 @@ def export_data_for_annotation(sampled_data:pd.DataFrame, path_to_save:str) -> N
         )
         df_for_annotation = pd.DataFrame(prepared_contexts).reset_index(drop=True)
         df_for_annotation.columns = ["INPUT:text"]
-        df_for_annotation.to_csv(str(path_to_save / f"pool_{idx+1}.tsv"), sep='\t')
+        df_for_annotation.to_csv(str(path_to_save / f"pool_{idx+1}.tsv"), sep='\t', index=False)
 
 @click.command()
 @click.argument("save_dir")
