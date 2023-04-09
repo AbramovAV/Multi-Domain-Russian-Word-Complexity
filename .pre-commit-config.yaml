@@ -4,6 +4,7 @@ repos:
   hooks:
   -   id: check-yaml
   -   id: end-of-file-fixer
+      exclude: ^data/*
   -   id: trailing-whitespace
 
 - repo: local
@@ -32,5 +33,3 @@ repos:
       types: [python]
       stages: [commit]
       entry: pylint src/
-
-exclude: data/
