@@ -1,5 +1,9 @@
-from src.tools.data_preparation.prepare_data_for_annotation import _add_marks
+from pathlib import Path
+
 import pandas as pd
+
+from src.tools.data_preparation.prepare_data_for_annotation import _add_marks
+
 
 def merge_annotated_toloka_tsv(*pathes, drop_cols=None):
     dataframe = pd.read_csv(pathes[0], sep='\t')
@@ -64,6 +68,18 @@ def filter_by_freq_range(dataframe:pd.DataFrame, freq_range=None):
         ids = (freq_range[0] <= dataframe["frequency(ipm)"]) & \
             (dataframe["frequency(ipm)"] <= freq_range[1])
         return dataframe[ids]
+
+
+def load_and_prep_dataframe(pools_folder:str, initial_df:pd.DataFrame) -> pd.DataFrame:
+    dataframe = merge_annotated_toloka_tsv(
+        *[f for f in Path(pools_folder).rglob("*.tsv") if f.is_file()],
+        drop_cols=["GOLDEN:complexity",
+                  "HINT:text",
+                  "HINT:default_language",
+                  "ASSIGNMENT:assignment_id"])
+    dataframe = project_labels_into_contunious(dataframe)
+    dataframe = add_freq_for_sentence(dataframe, pd.read_csv(initial_df, sep="\t"))
+    return dataframe
 
 
 def perform_t_test():

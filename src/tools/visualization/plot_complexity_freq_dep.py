@@ -6,10 +6,7 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 
-from src.tools.data_analysis.analysis_utils import aggregate_by_lemma, \
-    merge_annotated_toloka_tsv, add_freq_for_sentence, \
-        project_labels_into_contunious, filter_by_freq_range, \
-            filter_by_fast_responses
+from src.tools.data_analysis.analysis_utils import aggregate_by_lemma, load_and_prep_dataframe
 from src.tools.data_preparation.prepare_data_for_annotation import FREQUENCY_RANGES
 
 sns.set_style("darkgrid")
@@ -60,14 +57,7 @@ def plot_complexity_freq_dep(dataframe, decimate_ratio=0.01, save_dir='.',):
 @click.option("--decimate_ratio", default=0.01)
 @click.option("--save_dir", default=".")
 def main(pools_folder, initial_df, fast_responses_limit, decimate_ratio, save_dir):
-    dataframe = merge_annotated_toloka_tsv(
-        *[f for f in Path(pools_folder).rglob("*.tsv") if f.is_file()],
-        drop_cols=["GOLDEN:complexity",
-                  "HINT:text",
-                  "HINT:default_language",
-                  "ASSIGNMENT:assignment_id"])
-    dataframe = project_labels_into_contunious(dataframe)
-    dataframe = add_freq_for_sentence(dataframe, pd.read_csv(initial_df, sep="\t"))
+    dataframe = load_and_prep_dataframe(pools_folder, initial_df)
     plot_complexity_freq_dep(dataframe, decimate_ratio, save_dir=save_dir)
 
 if __name__=='__main__':

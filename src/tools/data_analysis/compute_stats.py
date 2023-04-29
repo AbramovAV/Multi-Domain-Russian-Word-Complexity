@@ -6,10 +6,8 @@ import pandas as pd
 from scipy.stats import pearsonr, spearmanr
 from statsmodels.stats.inter_rater import fleiss_kappa
 
-from src.tools.data_analysis.analysis_utils import merge_annotated_toloka_tsv, \
-     add_freq_for_sentence, project_labels_into_contunious, \
-          filter_by_freq_range, aggregate_by_lemma, filter_by_fast_responses, \
-              project_labels_into_discrete
+from src.tools.data_analysis.analysis_utils import filter_by_freq_range, aggregate_by_lemma, filter_by_fast_responses, \
+              project_labels_into_discrete, load_and_prep_dataframe
 from src.tools.data_preparation.prepare_data_for_annotation import FREQUENCY_RANGES
 
 pd.options.mode.chained_assignment = None
@@ -75,23 +73,9 @@ def compute_correlation_between_intersection(l_dataframe:pd.DataFrame, r_datafra
 @click.option("--split_by_freq_ranges", is_flag=True)
 @click.option("--fast_responses_limit", default=15)
 def main(pools_folder, auxiliary_pools_folder, auxiliary_initial_df, split_by_freq_ranges, initial_df, fast_responses_limit):
-    dataframe = merge_annotated_toloka_tsv(
-        *[f for f in Path(pools_folder).rglob("*.tsv") if f.is_file()],
-        drop_cols=["GOLDEN:complexity",
-                  "HINT:text",
-                  "HINT:default_language",
-                  "ASSIGNMENT:assignment_id"])
-    dataframe = project_labels_into_contunious(dataframe)
-    dataframe = add_freq_for_sentence(dataframe, pd.read_csv(initial_df, sep="\t"))
+    dataframe = load_and_prep_dataframe(pools_folder, initial_df)
     if auxiliary_pools_folder is not None:
-        auxiliary_dataframe = merge_annotated_toloka_tsv(
-        *[f for f in Path(auxiliary_pools_folder).rglob("*.tsv") if f.is_file()],
-        drop_cols=["GOLDEN:complexity",
-                  "HINT:text",
-                  "HINT:default_language",
-                  "ASSIGNMENT:assignment_id"])
-        auxiliary_dataframe = project_labels_into_contunious(auxiliary_dataframe)
-        auxiliary_dataframe = add_freq_for_sentence(auxiliary_dataframe, pd.read_csv(auxiliary_initial_df, sep="\t"))
+        auxiliary_dataframe = load_and_prep_dataframe(auxiliary_pools_folder, auxiliary_initial_df)
     if split_by_freq_ranges:
         for freq_range in sorted(FREQUENCY_RANGES):
             mean = compute_mean_complexity(dataframe, freq_range)
