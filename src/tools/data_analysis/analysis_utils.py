@@ -29,6 +29,7 @@ def project_labels_into_contunious(dataframe:pd.DataFrame) -> pd.DataFrame:
 
 
 def project_labels_into_discrete(dataframe:pd.DataFrame) -> pd.DataFrame:
+    dataframe = dataframe.copy(deep=True)
     dataframe["OUTPUT:complexity"] = ((dataframe["OUTPUT:complexity"] / 0.25) + 1).astype(int)
     return dataframe
 

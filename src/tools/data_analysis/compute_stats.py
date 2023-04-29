@@ -3,6 +3,7 @@ from pathlib import Path
 import click
 import numpy as np
 import pandas as pd
+from scipy.stats import pearsonr, spearmanr
 from statsmodels.stats.inter_rater import fleiss_kappa
 
 from src.tools.data_analysis.analysis_utils import merge_annotated_toloka_tsv, \
@@ -50,6 +51,20 @@ def compute_datasets_intersection(l_dataframe:pd.DataFrame, r_dataframe:pd.DataF
         l_dataframe = filter_by_freq_range(l_dataframe, freq_range)
         r_dataframe = filter_by_freq_range(r_dataframe, freq_range)
     return len(l_dataframe[l_dataframe.index.isin(r_dataframe.index)])
+
+
+def compute_correlation_between_intersection(l_dataframe:pd.DataFrame, r_dataframe:pd.DataFrame) -> int:
+    l_dataframe = aggregate_by_lemma(l_dataframe)
+    r_dataframe = aggregate_by_lemma(r_dataframe)
+    l_inter_ids = l_dataframe.index.isin(r_dataframe.index)
+    r_inter_ids = r_dataframe.index.isin(l_dataframe.index)
+    l_complexity = l_dataframe[l_inter_ids].sort_index()["OUTPUT:complexity"]
+    r_complexity = r_dataframe[r_inter_ids].sort_index()["OUTPUT:complexity"]
+    p_corr = pearsonr(l_complexity,
+                      r_complexity)
+    s_corr = spearmanr(l_complexity,
+                       r_complexity)
+    return p_corr, s_corr
 
 
 @click.command()
@@ -100,7 +115,9 @@ def main(pools_folder, auxiliary_pools_folder, auxiliary_initial_df, split_by_fr
         if auxiliary_pools_folder is not None:
             lemma_intersection = compute_datasets_intersection(dataframe, auxiliary_dataframe)
             print(f"Overall intersected lemmas between datasets: {lemma_intersection}")
-
+    if auxiliary_pools_folder is not None:
+        p_corr, s_corr = compute_correlation_between_intersection(dataframe, auxiliary_dataframe)
+        print(f"Pearson corr: {p_corr}, Spearman corr: {s_corr}")
 if __name__ == '__main__':
     main()
 
