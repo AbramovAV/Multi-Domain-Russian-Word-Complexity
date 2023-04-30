@@ -27,6 +27,9 @@ def compute_std_complexity(dataframe:pd.DataFrame, freq_range=None):
 
 
 def compute_annotator_agreement(dataframe, freq_range=None):
+    """
+    https://stats.stackexchange.com/questions/153225/why-does-fleisss-kappa-decrease-with-increased-response-homogeneity/207640#207640
+    """
     if freq_range is not None:
         dataframe = filter_by_freq_range(dataframe, freq_range)
     if dataframe["OUTPUT:complexity"].dtype == float:
