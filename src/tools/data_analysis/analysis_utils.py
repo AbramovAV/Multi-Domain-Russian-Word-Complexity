@@ -82,10 +82,6 @@ def load_and_prep_dataframe(pools_folder:str, initial_df:pd.DataFrame) -> pd.Dat
     return dataframe
 
 
-def perform_t_test():
-    pass
-
-
 def filter_by_fast_responses(dataframe: pd.DataFrame, response_limit=15) -> pd.DataFrame:
     ids = (dataframe["ASSIGNMENT:submitted"].dt.total_seconds() - \
         dataframe["ASSIGNMENT:started"].dt.total_seconds()) >= response_limit

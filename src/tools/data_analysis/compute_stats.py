@@ -1,10 +1,12 @@
 from pathlib import Path
+from typing import Tuple
 
 import click
 import numpy as np
 import pandas as pd
 from scipy.stats import pearsonr, spearmanr
 from statsmodels.stats.inter_rater import fleiss_kappa
+from statsmodels.stats.weightstats import ttest_ind
 
 from src.tools.data_analysis.analysis_utils import filter_by_freq_range, aggregate_by_lemma, filter_by_fast_responses, \
               project_labels_into_discrete, load_and_prep_dataframe
@@ -68,6 +70,21 @@ def compute_correlation_between_intersection(l_dataframe:pd.DataFrame, r_datafra
     return p_corr, s_corr
 
 
+def perform_t_test(l_dataframe:pd.DataFrame, r_dataframe:pd.DataFrame, freq_range=None) -> Tuple[float, float, float]:
+    l_dataframe = aggregate_by_lemma(l_dataframe)
+    r_dataframe = aggregate_by_lemma(r_dataframe)
+    if freq_range:
+        l_dataframe = filter_by_freq_range(l_dataframe, freq_range)
+        r_dataframe = filter_by_freq_range(r_dataframe, freq_range)
+    return ttest_ind(
+        l_dataframe["OUTPUT:complexity"],
+        r_dataframe["OUTPUT:complexity"],
+        alternative="two-sided",
+        usevar="unequal",
+        value=0
+    )
+
+
 @click.command()
 @click.argument("pools_folder")
 @click.argument("initial_df")
@@ -92,6 +109,9 @@ def main(pools_folder, auxiliary_pools_folder, auxiliary_initial_df, split_by_fr
                 lemma_intersection = compute_datasets_intersection(dataframe, auxiliary_dataframe, freq_range)
                 print(f"Intersected lemmas between datasets for freq range {freq_range[0]}-{freq_range[1]} ipm:")
                 print(lemma_intersection)
+                tstat, pval, df = perform_t_test(dataframe, auxiliary_dataframe, freq_range)
+                print(f"Welch ttest between datasets for freq range {freq_range[0]}-{freq_range[1]} ipm:")
+                print(f"Difference in averages is {'not ' if pval > 0.05 else ''}significant with p-value {pval}")
     else:
         mean = compute_mean_complexity(dataframe)
         std = compute_std_complexity(dataframe)
@@ -105,6 +125,9 @@ def main(pools_folder, auxiliary_pools_folder, auxiliary_initial_df, split_by_fr
     if auxiliary_pools_folder is not None:
         p_corr, s_corr = compute_correlation_between_intersection(dataframe, auxiliary_dataframe)
         print(f"Pearson corr: {p_corr}, Spearman corr: {s_corr}")
+        tstat, pval, df = perform_t_test(dataframe, auxiliary_dataframe)
+        print("Welch ttest between datasets:")
+        print(f"Difference in averages is {'not ' if pval > 0.05 else ''}significant with p-value {pval}")
 if __name__ == '__main__':
     main()
 
