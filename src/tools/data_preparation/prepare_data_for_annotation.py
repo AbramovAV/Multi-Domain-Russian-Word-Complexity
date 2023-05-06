@@ -268,13 +268,13 @@ def sample_data_for_annotation(
 
 
 def _add_marks(df_row: Dict) -> str:
-        """
-        Adds <mark> tags around target word
-        """
-        before_target = df_row['context'][:df_row['start_idx']]
-        target = df_row['target_word']
-        after_target = df_row['context'][df_row['start_idx'] + len(target):]
-        return before_target + "<mark>" + target + "</mark>" + after_target
+    """
+    Adds <mark> tags around target word
+    """
+    before_target = df_row['context'][:df_row['start_idx']]
+    target = df_row['target_word']
+    after_target = df_row['context'][df_row['start_idx'] + len(target):]
+    return before_target + "<mark>" + target + "</mark>" + after_target
 
 
 def export_data_for_annotation(
@@ -355,4 +355,4 @@ def main(save_dir: str,
 
 
 if __name__ == '__main__':
-    main()  # pylint: disable=E1120
+    main()  # pylint: disable=no-value-for-parameter

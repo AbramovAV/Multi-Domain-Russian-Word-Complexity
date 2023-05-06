@@ -1,29 +1,68 @@
+"""
+Plots scatter plot to demonstrate a non-linear dependency between
+a word complexity (y-axis) and word frequency (x-axis).
+By default, reduces the number of elements with legend by a factor of 100.
+"""
 from pathlib import Path
 
 import click
 import matplotlib.pyplot as plt
-import numpy as np
 import pandas as pd
 import seaborn as sns
 
-from src.tools.data_analysis.analysis_utils import aggregate_by_lemma, load_and_prep_dataframe
-from src.tools.data_preparation.prepare_data_for_annotation import FREQUENCY_RANGES
+from src.tools.data_analysis.analysis_utils import (aggregate_by_lemma,
+                                                    load_and_prep_dataframe)
 
 sns.set_style("darkgrid")
 
-def _annotate_points(dataframe: pd.DataFrame, ax:plt.Axes) -> plt.Axes:
+
+def _annotate_points(dataframe: pd.DataFrame, axis: plt.Axes) -> plt.Axes:
+    """
+    Writes a word corresponding to a specific point on scatter plot.
+
+    Args:
+        dataframe: pandas Dataframe with words freq, complexity and lemma.
+        axis: pyplot axis object with scatter plot.
+
+    Returns:
+        pyplot axis object with scatter plot and some annotated points.
+    """
     for task_id in range(0, dataframe.shape[0]):
-        ax.text(dataframe["frequency(ipm)"][task_id]+0.01, dataframe["OUTPUT:complexity"][task_id], 
-        dataframe["lemma"][task_id], horizontalalignment='left', 
-        size='medium', color='black', weight='semibold')
-    return ax
+        axis.text(
+            dataframe["frequency(ipm)"][task_id]+0.01,
+            dataframe["OUTPUT:complexity"][task_id],
+            dataframe["lemma"][task_id],
+            horizontalalignment="left",
+            size="medium",
+            color="black",
+            weight="semibold"
+        )
+    return axis
 
 
-def plot_complexity_freq_dep(dataframe, decimate_ratio=0.01, save_dir='.',):
+def plot_complexity_freq_dep(
+        dataframe: pd.DataFrame,
+        decimate_ratio=0.01,
+        save_dir='.'
+        ) -> None:
+    """
+    Plots scatter plot with word complexity at y-axis and frequency at x-axis.
+
+    Args:
+        dataframe: pandas Dataframe with words freq, complexity and lemma.
+        decimate_ratio: fraction of data to annotate.
+        save_dir: directory to save an image with plot.
+
+    Returns:
+        None
+    """
     sns.set_style("darkgrid")
-    sns.set(rc={'figure.figsize':(12, 8)})
+    sns.set(rc={'figure.figsize': (12, 8)})
 
-    dataframe = aggregate_by_lemma(dataframe, auxiliary_mapping={"frequency(ipm)": "mean"})
+    dataframe = aggregate_by_lemma(
+        dataframe,
+        auxiliary_mapping={"frequency(ipm)": "mean"}
+    )
     foreground_data = dataframe.sample(frac=decimate_ratio, axis='rows')
     background_data = dataframe[~dataframe.index.isin(foreground_data.index)]
     filename = "complexity_freq_dep.png"
@@ -34,7 +73,7 @@ def plot_complexity_freq_dep(dataframe, decimate_ratio=0.01, save_dir='.',):
         alpha=1.0,
         )
     ax1 = _annotate_points(foreground_data, ax1)
-    ax2 = sns.scatterplot(
+    _ = sns.scatterplot(
         x=background_data["frequency(ipm)"],
         y=background_data["OUTPUT:complexity"],
         alpha=0.1,
@@ -53,12 +92,23 @@ def plot_complexity_freq_dep(dataframe, decimate_ratio=0.01, save_dir='.',):
 @click.command()
 @click.argument("pools_folder")
 @click.argument("initial_df")
-@click.option("--fast_responses_limit", default=15)
+# @click.option("--fast_responses_limit", default=15)
 @click.option("--decimate_ratio", default=0.01)
 @click.option("--save_dir", default=".")
-def main(pools_folder, initial_df, fast_responses_limit, decimate_ratio, save_dir):
+def main(
+        pools_folder,
+        initial_df,
+        # fast_responses_limit,
+        decimate_ratio,
+        save_dir
+        ) -> None:
+    """
+    POOLS_FOLDER: directory with annotation results (tsv) from toloka
+    INITIAL_DF: tsv file with all sentences and their data (lemma, freq, word)
+    """
     dataframe = load_and_prep_dataframe(pools_folder, initial_df)
     plot_complexity_freq_dep(dataframe, decimate_ratio, save_dir=save_dir)
 
-if __name__=='__main__':
-    main()
+
+if __name__ == '__main__':
+    main()  # pylint: disable=no-value-for-parameter

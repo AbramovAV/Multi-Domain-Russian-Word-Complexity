@@ -22,8 +22,9 @@ repos:
       name: flake8
       language: python
       types: [python]
-      stages: [commit, push]
+      stages: [commit]
       entry: flake8 src/
+      require_serial: true
 
 - repo: local
   hooks:
@@ -33,3 +34,4 @@ repos:
       types: [python]
       stages: [commit]
       entry: pylint src/
+      require_serial: true
