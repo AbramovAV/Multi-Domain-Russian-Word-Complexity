@@ -25,7 +25,7 @@ from src.tools.data_preparation import FREQUENCY_RANGES
 pd.options.mode.chained_assignment = None
 
 
-def compute_mean_complexity(dataframe: pd.DataFrame, freq_range=None) -> float:
+def mean_complexity(dataframe: pd.DataFrame, freq_range=None) -> float:
     """
     Computes mean value for word complexities projected into [0,1] range and
     aggregated by lemma. Optionally, does that only for given freq range.
@@ -43,7 +43,7 @@ def compute_mean_complexity(dataframe: pd.DataFrame, freq_range=None) -> float:
     return dataframe["OUTPUT:complexity"].mean()
 
 
-def compute_std_complexity(dataframe: pd.DataFrame, freq_range=None) -> float:
+def std_complexity(dataframe: pd.DataFrame, freq_range=None) -> float:
     """
     Computes standard deviation for word complexities projected into [0,1]
     range and aggregated by lemma. Optionally, does that only for given freq
@@ -62,7 +62,7 @@ def compute_std_complexity(dataframe: pd.DataFrame, freq_range=None) -> float:
     return dataframe["OUTPUT:complexity"].std()
 
 
-def compute_annotator_agreement(
+def annotator_agreement(
         dataframe: pd.DataFrame,
         freq_range=None
         ) -> float:
@@ -94,7 +94,7 @@ def compute_annotator_agreement(
     return fleiss_kappa(scores_mat, method='fleiss')
 
 
-def compute_datasets_intersection(
+def datasets_intersection(
         l_dataframe: pd.DataFrame,
         r_dataframe: pd.DataFrame,
         freq_range=None
@@ -119,7 +119,7 @@ def compute_datasets_intersection(
     return len(l_dataframe[l_dataframe.index.isin(r_dataframe.index)])
 
 
-def compute_correlation_between_intersection(
+def correlation_between_intersection(
         l_dataframe: pd.DataFrame,
         r_dataframe: pd.DataFrame
         ) -> Tuple:
@@ -142,7 +142,7 @@ def compute_correlation_between_intersection(
     return p_corr, s_corr
 
 
-def perform_ttest(
+def welch_ttest(
         l_dataframe: pd.DataFrame,
         r_dataframe: pd.DataFrame,
         alternative="larger",
@@ -175,10 +175,10 @@ def perform_ttest(
         alternative=alternative,
         usevar="unequal",
         value=ttest_value
-    )
+    )[1]
 
 
-def perform_paired_ttost(
+def paired_ttost(
         l_dataframe: pd.DataFrame,
         r_dataframe: pd.DataFrame,
         ttost_range=(0, 0.01),
@@ -205,12 +205,13 @@ def perform_paired_ttost(
         l_dataframe,
         r_dataframe
     )
-    return ttost_paired(
-        l_complexity,
-        r_complexity,
-        low=ttost_range[0],
-        upp=ttost_range[1],
-    )
+    ppval, (_, l_pval, _), (_, u_pval, _) = ttost_paired(
+                                                         l_complexity,
+                                                         r_complexity,
+                                                         low=ttost_range[0],
+                                                         upp=ttost_range[1],
+                                                        )
+    return ppval, l_pval, u_pval
 
 
 @click.command()
@@ -223,8 +224,7 @@ def perform_paired_ttost(
               default="larger",
               type=click.Choice(
                   ['larger', 'smaller', 'two_sided'],
-                  case_sensitive=True)
-             )
+                  case_sensitive=True))
 @click.option("--ttest_value", default=0, type=float)
 @click.option("--ttost_range", type=(float, float), default=(0, 0.01))
 # @click.option("--fast_responses_limit", default=15)
@@ -254,48 +254,48 @@ def main(  # pylint: disable=too-many-arguments
             print("-" * 20)
             print("Mean and std complexity:")
             print(
-                np.round(compute_mean_complexity(dataframe, freq_range), 3),
-                np.round(compute_std_complexity(dataframe, freq_range), 3))
+                np.round(mean_complexity(dataframe, freq_range), 3),
+                np.round(std_complexity(dataframe, freq_range), 3))
             print("Fleiss kappa:")
             print(np.round(
-                compute_annotator_agreement(dataframe, freq_range), 3))
+                annotator_agreement(dataframe, freq_range), 3))
             if auxiliary_pools_folder is not None:
                 print("Common lemmas between datasets:")
-                print(compute_datasets_intersection(
+                print(datasets_intersection(
                     dataframe, auxiliary_dataframe, freq_range))
-                _, pval, _ = perform_ttest(
+                pval = welch_ttest(
                     dataframe, auxiliary_dataframe, ttest_alternative,
                     ttest_value, freq_range)
                 print("Welch ttest between datasets:")
                 print(f"P-value: {pval}")
-                ppval, (_, l_pval, _), (_, u_pval, _) = perform_paired_ttost(
+                ppvals = paired_ttost(
                     dataframe, auxiliary_dataframe, freq_range, ttost_range)
                 print("Paired TOST between datasets:")
-                print(f"P-value: {ppval}, p-value (lower): {l_pval}, "
-                      f"p-value (upper): {u_pval}")
+                print(f"P-value: {ppvals[0]}, p-value (lower): {ppvals[1]}, "
+                      f"p-value (upper): {ppvals[2]}")
             print("-" * 20)
     else:
-        print(f"Mean complexity: {np.round(compute_mean_complexity(dataframe), 3)}")
-        print(f"STD complexity: {np.round(compute_std_complexity(dataframe), 3)}")
-        print(f"Fleiss kappa: {np.round(compute_annotator_agreement(dataframe), 3)}")
+        print(f"Mean complexity: {np.round(mean_complexity(dataframe), 3)}")
+        print(f"STD complexity: {np.round(std_complexity(dataframe), 3)}")
+        print(f"Fleiss kappa: {np.round(annotator_agreement(dataframe), 3)}")
         if auxiliary_pools_folder is not None:
-            lemma_intersection = compute_datasets_intersection(
+            lemma_intersection = datasets_intersection(
                 dataframe, auxiliary_dataframe)
             print(f"Common lemmas between datasets: {lemma_intersection}")
     if auxiliary_pools_folder is not None:
-        p_corr, s_corr = compute_correlation_between_intersection(
+        corrs = correlation_between_intersection(
             dataframe, auxiliary_dataframe)
-        print(f"Pearson corr: {p_corr}, Spearman corr: {s_corr}")
-        _, pval, _ = perform_ttest(
+        print(f"Pearson corr: {corrs[0]}, Spearman corr: {corrs[1]}")
+        pval = welch_ttest(
                     dataframe, auxiliary_dataframe, ttest_alternative,
                     ttest_value)
         print("Welch ttest between datasets:")
         print(f"P-value: {pval}")
-        ppval, (_, l_pval, _), (_, u_pval, _) = perform_paired_ttost(
+        ppvals = paired_ttost(
             dataframe, auxiliary_dataframe, ttost_range)
         print("Paired TOST between datasets:")
-        print(f"P-value: {ppval}, p-value (lower): {l_pval}, "
-              f"p-value (upper): {u_pval}")
+        print(f"P-value: {ppvals[0]}, p-value (lower): {ppvals[1]}, "
+              f"p-value (upper): {ppvals[2]}")
 
 
 if __name__ == '__main__':
