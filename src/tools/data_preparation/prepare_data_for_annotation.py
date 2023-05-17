@@ -25,7 +25,7 @@ FREQUENCY_RANGES = (  # instances per million
     (1401, 3100),
     (5, 10),
     (2, 4),
-    (3101, 10000),
+    # (3101, 10000),
 )  # changing order to inspect rare words first
 
 MAX_SAMPLED_CONTEXTS_PER_LEMMA = 5
@@ -267,6 +267,16 @@ def sample_data_for_annotation(
     return pd.DataFrame.from_dict(resulting_data)
 
 
+def _add_marks(df_row: Dict) -> str:
+    """
+    Adds <mark> tags around target word
+    """
+    before_target = df_row['context'][:df_row['start_idx']]
+    target = df_row['target_word']
+    after_target = df_row['context'][df_row['start_idx'] + len(target):]
+    return before_target + "<mark>" + target + "</mark>" + after_target
+
+
 def export_data_for_annotation(
         sampled_data: pd.DataFrame,
         path_to_save: str) -> None:
@@ -278,15 +288,6 @@ def export_data_for_annotation(
         sampled_data: dataframe with data to export
         path_to_save: folder to store prepared data
     """
-    def add_marks(df_row: Dict) -> str:
-        """
-        Adds <mark> tags around target word
-        """
-        before_target = df_row['context'][:df_row['start_idx']]
-        target = df_row['target_word']
-        after_target = df_row['context'][df_row['start_idx'] + len(target):]
-        return before_target + "<mark>" + target + "</mark>" + after_target
-
     path_to_save = Path(path_to_save)
     sampled_data = sampled_data.sample(frac=1)
     sub_dfs = np.array_split(
@@ -296,7 +297,7 @@ def export_data_for_annotation(
 
     for idx, sub_df in enumerate(sub_dfs):
         prepared_contexts = sub_df.apply(
-            add_marks,
+            _add_marks,
             axis=1
         )
         df_for_annotation = pd.DataFrame(prepared_contexts)
@@ -354,4 +355,4 @@ def main(save_dir: str,
 
 
 if __name__ == '__main__':
-    main()  # pylint: disable=E1120
+    main()  # pylint: disable=no-value-for-parameter
