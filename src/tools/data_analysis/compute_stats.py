@@ -19,7 +19,7 @@ from statsmodels.stats.weightstats import ttest_ind, ttost_paired
 
 from src.tools.data_analysis.analysis_utils import (
     aggregate_by_lemma, filter_by_freq_range, load_and_prep_dataframe,
-    project_labels_into_discrete, select_labels_for_common_lemmas)
+    project_labels_into_discrete, select_common_lemmas)
 from src.tools.data_preparation import FREQUENCY_RANGES
 
 pd.options.mode.chained_assignment = None
@@ -134,11 +134,16 @@ def correlation_between_intersection(
     Returns:
         Pearson and Spearman correlation scores.
     """
-    label_pairs = select_labels_for_common_lemmas(l_dataframe, r_dataframe)
-    p_corr = pearsonr(label_pairs[0],
-                      label_pairs[1])
-    s_corr = spearmanr(label_pairs[0],
-                       label_pairs[1])
+    l_dataframe, r_dataframe = select_common_lemmas(
+        l_dataframe,
+        r_dataframe
+    )
+    l_complexity = l_dataframe["OUTPUT:complexity"]
+    r_complexity = r_dataframe["OUTPUT:complexity"]
+    p_corr = pearsonr(l_complexity,
+                      r_complexity)
+    s_corr = spearmanr(l_complexity,
+                       r_complexity)
     return p_corr, s_corr
 
 
@@ -201,10 +206,12 @@ def paired_ttost(
     if freq_range is not None:
         l_dataframe = filter_by_freq_range(l_dataframe, freq_range)
         r_dataframe = filter_by_freq_range(r_dataframe, freq_range)
-    l_complexity, r_complexity = select_labels_for_common_lemmas(
+    l_dataframe, r_dataframe = select_common_lemmas(
         l_dataframe,
         r_dataframe
     )
+    l_complexity = l_dataframe["OUTPUT:complexity"]
+    r_complexity = r_dataframe["OUTPUT:complexity"]
     ppval, (_, l_pval, _), (_, u_pval, _) = ttost_paired(
                                                          l_complexity,
                                                          r_complexity,

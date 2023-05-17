@@ -224,7 +224,7 @@ def filter_by_fast_responses(
     return dataframe[ids]
 
 
-def select_labels_for_common_lemmas(
+def select_common_lemmas(
         l_dataframe: pd.DataFrame,
         r_dataframe: pd.DataFrame
         ) -> Tuple[pd.DataFrame]:
@@ -242,6 +242,6 @@ def select_labels_for_common_lemmas(
     r_dataframe = aggregate_by_lemma(r_dataframe)
     l_inter_ids = l_dataframe.index.isin(r_dataframe.index)
     r_inter_ids = r_dataframe.index.isin(l_dataframe.index)
-    l_complexity = l_dataframe[l_inter_ids].sort_index()["OUTPUT:complexity"]
-    r_complexity = r_dataframe[r_inter_ids].sort_index()["OUTPUT:complexity"]
-    return l_complexity, r_complexity
+    l_dataframe = l_dataframe[l_inter_ids].sort_index()
+    r_dataframe = r_dataframe[r_inter_ids].sort_index()
+    return l_dataframe, r_dataframe

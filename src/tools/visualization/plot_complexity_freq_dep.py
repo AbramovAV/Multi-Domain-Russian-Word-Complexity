@@ -32,10 +32,12 @@ def _annotate_points(dataframe: pd.DataFrame, axis: plt.Axes) -> plt.Axes:
             dataframe["frequency(ipm)"][task_id]+0.01,
             dataframe["OUTPUT:complexity"][task_id],
             dataframe["lemma"][task_id],
+            # pylint: disable=duplicate-code
             horizontalalignment="left",
             size="medium",
             color="black",
             weight="semibold"
+            # pylint: disable=duplicate-code
         )
     return axis
 
