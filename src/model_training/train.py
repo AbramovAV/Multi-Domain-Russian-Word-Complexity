@@ -7,8 +7,9 @@ from sklearn.model_selection import KFold
 from transformers import Trainer, TrainingArguments
 
 
-def run_experiment(model, train_dataset, test_dataset, training_args, k_folds=10):
+def run_experiment(model_name, train_dataset, test_dataset, training_args, k_folds=10):
     if test_dataset is not None:
+        model = get_model(model_name)
         trainer = Trainer(
             model=model,
             args=training_args,
@@ -22,12 +23,11 @@ def run_experiment(model, train_dataset, test_dataset, training_args, k_folds=10
         print(result)
     else:
         kf = KFold(n_splits=k_folds, shuffle=True)
-        maes = []
-        corrs = []
         for train_indices, test_indices in kf.split(train_dataset):
             train_subset = train_dataset.from_indices(train_indices)
             test_subset = train_dataset.from_indices(test_indices)
 
+            model = get_model(model_name)
             trainer = Trainer(
             model=model,
             args=training_args,
@@ -38,10 +38,7 @@ def run_experiment(model, train_dataset, test_dataset, training_args, k_folds=10
 
             trainer.train()
             result = trainer.evaluate()
-            maes.append(result["mean_absolute_error"])
-            corrs.append(result["correlation_coefficient"])
             print(result)
-        print(f"Mean MAE: {np.mean(maes)}, mean corr: {np.mean(corrs)}")
 
 @click.command()
 @click.argument("train_dataset_folder")
@@ -63,16 +60,16 @@ def main(
         train_initial_data,
         test_dataset_folder,
         test_initial_data,
-        k_folds,
-        train_epochs,
-        batch_size,
-        warmup_steps,
-        learning_rate,
-        weight_decay,
-        logging_dir,
-        logging_steps,
-        save_steps,
-        evaluation_strategy,
+        k_folds=5,
+        train_epochs=50,
+        batch_size=128,
+        warmup_steps=5,
+        learning_rate=1e-5,
+        weight_decay=0.01,
+        logging_dir="./logs",
+        logging_steps=50,
+        save_steps=500,
+        evaluation_strategy="steps",
         ) -> None:
     train_dataset = ComplexityDataset(
         prepare_dataset(train_dataset_folder, train_initial_data),
@@ -83,9 +80,6 @@ def main(
         get_tokenizer("DeepPavlov/rubert-base-cased"))
     else:
         test_dataset = None
-
-
-    model = get_model("DeepPavlov/rubert-base-cased")
 
 
     training_args = TrainingArguments(
@@ -102,7 +96,7 @@ def main(
         save_steps=save_steps,
         evaluation_strategy=evaluation_strategy,
     )
-    run_experiment(model, train_dataset, test_dataset,
+    run_experiment("DeepPavlov/rubert-base-cased", train_dataset, test_dataset,
                    k_folds=k_folds, training_args=training_args)
 
 if __name__=="__main__":
