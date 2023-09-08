@@ -7,23 +7,23 @@ repos:
       exclude: ^data/*
   -   id: trailing-whitespace
 
-- repo: local
+- repo: https://github.com/PyCQA/isort
+  rev: 5.12.0
   hooks:
     - id: isort
       name: isort (python)
       language: python
       types: [python]
       stages: [commit]
-      entry: isort src/
 
-- repo: local
+- repo: https://github.com/PyCQA/flake8
+  rev: 6.0.0
   hooks:
     - id: flake8
       name: flake8
       language: python
       types: [python]
       stages: [commit]
-      entry: flake8 src/
       require_serial: true
 
 - repo: local
@@ -32,6 +32,5 @@ repos:
       name: pylint
       language: python
       types: [python]
-      stages: [commit]
       entry: pylint src/
       require_serial: true

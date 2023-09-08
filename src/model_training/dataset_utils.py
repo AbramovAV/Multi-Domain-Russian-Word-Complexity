@@ -7,7 +7,7 @@ import numpy as np
 import torch
 from pandas import DataFrame, Series
 from scipy.stats import pearsonr
-from sklearn.metrics import mean_absolute_error, mean_absolute_percentage_error
+from sklearn.metrics import mean_absolute_error
 from torch.utils.data import Dataset
 from transformers import AutoTokenizer, PreTrainedTokenizer
 
@@ -134,22 +134,29 @@ def run_on_validation_set(model, test_dataset):
         result = model(
             input_ids=inputs['input_ids'],
             attention_mask=inputs['attention_mask'])
-        sentences = inputs["sentence"]
-        print(result.logits.item(), inputs['labels'].item(), sentences)
+        print(
+            result.logits.item(), inputs['labels'].item(),
+            inputs['sentence']
+        )
 
 
-def compute_metrics(pred):
+def compute_metrics(pred, which="both"):
     """
     Computes MAE and Pearson Correlation Coefficient
     on given predictions and ground truth data.
     """
-    labels = pred.label_ids.tolist()
+    labels = list(pred.label_ids)
     preds = [x[0] for x in pred.predictions]
     mae = mean_absolute_error(labels, preds)
-    mape = mean_absolute_percentage_error(labels, preds)
     corr, _ = pearsonr(labels, preds)
-    return {
-        'mean_absolute_error': mae,
-        'mean_absolute_percentage_error': mape,
-        'correlation_coefficient': corr
-    }
+    if which == "both":
+        metrics = {
+            'mean_absolute_error': mae,
+            'correlation_coefficient': corr
+        }
+    elif which == "mae":
+        metrics = {'mean_absolute_error': mae}
+    elif which == "corr":
+        metrics = {'correlation_coefficient': corr}
+
+    return metrics

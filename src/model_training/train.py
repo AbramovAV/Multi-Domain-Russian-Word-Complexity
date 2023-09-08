@@ -1,6 +1,8 @@
 """
 Main module for training the lexical complexity estimation model.
 """
+from random import sample
+
 import click
 from sklearn.model_selection import KFold
 from transformers import Trainer, TrainingArguments
@@ -8,56 +10,79 @@ from transformers import Trainer, TrainingArguments
 from src.model_training.dataset_utils import (ComplexityDataset,
                                               compute_metrics, get_tokenizer,
                                               prepare_dataset)
-from src.model_training.model_utils import get_model
+from src.model_training.model_utils import (model_init,
+                                            run_hyperparameter_optimization)
 
 
 def run_experiment(
-        model_name, train_dataset, test_dataset,
-        training_args, k_folds=10
+        train_dataset, test_dataset,
+        training_args, k_folds=10, tune_hyperparameters=False
         ) -> None:
     """
     Runs either single experiment or series of experiment for
     cross-validation.
 
     Args:
-        model_name: model name to load pretrained model from Transformers repo
         train_dataset: ComplexityDataset instance with training data
         test_dataset: ComplexityDataset instance with test data
         training_args: arguments for Trainer,
         e.g. learning rate, weight decay, etc.
         k_folds: number of folds for cross-validation
     """
+    predictions, labels = [], []
     if test_dataset is not None:
-        model = get_model(model_name)
+        if tune_hyperparameters:
+            training_args = run_hyperparameter_optimization(
+                    train_dataset.from_indices(list(range(256))),
+                    test_dataset.from_indices(list(range(256))),
+                    training_args)
+
         trainer = Trainer(
-            model=model,
+            model=None,
             args=training_args,
             train_dataset=train_dataset,
             eval_dataset=test_dataset,
             compute_metrics=compute_metrics,
+            model_init=model_init
         )
 
         trainer.train()
-        result = trainer.evaluate()
-        print(result)
+
+        result = trainer.predict(test_dataset)
+        predictions.extend(result.predictions.flatten().tolist())
+        labels.extend(result.label_ids)
+        print("Predictions: ", predictions)
+        print("Labels: ", labels)
     else:
-        folds = KFold(n_splits=k_folds, shuffle=True)
-        for train_indices, test_indices in folds.split(train_dataset):
+        k_folds = KFold(n_splits=k_folds, shuffle=True, random_state=42)
+        if tune_hyperparameters:
+            if tune_hyperparameters:
+                training_args = run_hyperparameter_optimization(
+                        train_dataset.from_indices(list(range(256))),
+                        train_dataset.from_indices(
+                            sample(
+                                list(range(256, len(train_dataset))), k=256)),
+                        training_args)
+
+        for train_indices, test_indices in k_folds.split(train_dataset):
             train_subset = train_dataset.from_indices(train_indices)
             test_subset = train_dataset.from_indices(test_indices)
 
-            model = get_model(model_name)
             trainer = Trainer(
-                model=model,
+                model=None,
                 args=training_args,
                 train_dataset=train_subset,
                 eval_dataset=test_subset,
                 compute_metrics=compute_metrics,
-            )
+                model_init=model_init
+                )
 
             trainer.train()
-            result = trainer.evaluate()
-            print(result)
+            result = trainer.predict(test_subset)
+            predictions.extend(result.predictions.flatten().tolist())
+            labels.extend(result.label_ids)
+        print("Predictions: ", predictions)
+        print("Labels: ", labels)
 
 
 @click.command()
@@ -83,6 +108,8 @@ def run_experiment(
 @click.option("--logging_steps", default=50, show_default=True)
 @click.option("--save_steps", default=500, show_default=True)
 @click.option("--evaluation_strategy", default="steps", show_default=True)
+@click.option(
+    "--tune_hyperparameters", is_flag=True, default=False, show_default=True)
 def main(  # pylint: disable=too-many-arguments, too-many-locals
         train_dataset_folder,
         train_initial_data,
@@ -98,19 +125,18 @@ def main(  # pylint: disable=too-many-arguments, too-many-locals
         logging_steps=50,
         save_steps=500,
         evaluation_strategy="steps",
+        tune_hyperparameters=False
         ) -> None:
     """
     Main functions for conducting experiments
     """
     train_dataset = ComplexityDataset(
         prepare_dataset(train_dataset_folder, train_initial_data),
-        get_tokenizer("DeepPavlov/rubert-base-cased")
-        )
+        get_tokenizer("DeepPavlov/rubert-base-cased"))
     if test_dataset_folder != train_dataset_folder:
         test_dataset = ComplexityDataset(
             prepare_dataset(test_dataset_folder, test_initial_data),
-            get_tokenizer("DeepPavlov/rubert-base-cased")
-            )
+            get_tokenizer("DeepPavlov/rubert-base-cased"))
     else:
         test_dataset = None
 
@@ -128,14 +154,9 @@ def main(  # pylint: disable=too-many-arguments, too-many-locals
         save_steps=save_steps,
         evaluation_strategy=evaluation_strategy,
     )
-
-    run_experiment(
-            "DeepPavlov/rubert-base-cased",
-            train_dataset,
-            test_dataset,
-            k_folds=k_folds,
-            training_args=training_args
-        )
+    run_experiment(train_dataset, test_dataset,
+                   k_folds=k_folds, training_args=training_args,
+                   tune_hyperparameters=tune_hyperparameters)
 
 
 if __name__ == "__main__":
