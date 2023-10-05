@@ -24,10 +24,14 @@ class ComplexityDataset(Dataset):
         tokenizer: pretrained model's tokenizer from Transformers repo.
     """
     def __init__(
-            self, data: Dict[str, Series], tokenizer: PreTrainedTokenizer
+            self, data: Dict[str, Series], tokenizer: PreTrainedTokenizer, has_labels=True
             ) -> None:
-        self.data = list(
-            zip(data["contexts"], data["scores"], data["targets"]))
+        if has_labels:
+            self.keys = ["contexts", "scores", "targets"]
+        else:
+            self.keys = ["contexts", "targets"]
+        self.has_labels = has_labels
+        self.data = list(zip(*[data[key] for key in self.keys]))
         self.tokenizer = tokenizer
         self.tokenized_data = self._tokenize_and_align_labels()
 
@@ -37,11 +41,19 @@ class ComplexityDataset(Dataset):
         with complexity scores and attention masks.
         """
         tokenized_data = []
-        for context, score, target in self.data:
+        for sample in self.data:
+            try:
+                if self.has_labels:
+                    context, score, target = sample
+                else:
+                    context, target = sample
+            except ValueError:
+                raise ValueError(f"Mismatch between data in sample and value of has_labels. Make sure to pass correct data.")
             tokenized_inputs = self.tokenizer(
                 text=context, text_pair=target, truncation=True,
                 padding='max_length', return_tensors='pt', max_length=48)
-            tokenized_inputs["labels"] = np.array(score).astype(np.float32)
+            if self.has_labels:
+                tokenized_inputs["labels"] = np.array(score).astype(np.float32)
             tokenized_inputs['attention_mask'] = torch.squeeze(
                 tokenized_inputs['attention_mask']).tolist()
             tokenized_inputs['input_ids'] = torch.squeeze(
@@ -74,15 +86,10 @@ class ComplexityDataset(Dataset):
         Returns:
             new instance of ComplexityDataset
         """
-        data = {
-            "contexts": [],
-            "scores": [],
-            "targets": []
-        }
+        data = {key:[] for key in self.keys}
         for idx in indices:
-            data["contexts"].append(self.data[idx][0])
-            data["scores"].append(self.data[idx][1])
-            data["targets"].append(self.data[idx][2])
+            for key_idx, key in self.keys:
+                data[key].append(self.data[idx][key_idx])
         return ComplexityDataset(data, self.tokenizer)
 
 
