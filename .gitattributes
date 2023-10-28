@@ -2,3 +2,6 @@ data/initial/medline-ru-en.tar.gz filter=lfs diff=lfs merge=lfs -text
 data/initial/medline_ru_en.tsv filter=lfs diff=lfs merge=lfs -text
 data/initial/un_2014_ru.tar.gz filter=lfs diff=lfs merge=lfs -text
 data/initial/un_2014_ru.tsv filter=lfs diff=lfs merge=lfs -text
+data/annotated/prepared_data/medline/data.tsv filter=lfs diff=lfs merge=lfs -text
+data/annotated/prepared_data/un/data.tsv filter=lfs diff=lfs merge=lfs -text
+data/annotated/annotated_data filter=lfs diff=lfs merge=lfs -text
